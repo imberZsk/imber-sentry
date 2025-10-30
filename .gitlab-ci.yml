@@ -1,0 +1,69 @@
+# GitLab CI 配置文件，适用于 Next.js 15 + Prisma 项目
+# 主要实现：
+# 1. 区分分支权限，main 只能通过 MR 合并（需在 GitLab 设置受保护分支）
+# 2. PR（Merge Request）时自动部署到测试环境
+# 3. main 分支合并后自动部署到生产环境
+
+stages:
+  - install # 安装依赖阶段
+  - lint # 代码规范检查阶段
+  # - test # 单元测试阶段
+  - build # 构建阶段
+  - deploy # 部署阶段
+
+variables:
+  NODE_ENV: 'development' # 默认 Node 环境变量
+  NEXT_TELEMETRY_DISABLED: '1' # 关闭 Next.js 遥测
+
+cache:
+  key: ${CI_COMMIT_REF_SLUG} # 缓存 key，按分支区分
+  paths:
+    - node_modules/ # 缓存 node_modules 目录，加速依赖安装
+
+before_script:
+  - node -v # 输出 Node 版本，便于排查问题
+  - pnpm -v # 输出 pnpm 版本
+
+install:
+  stage: install
+  script:
+    - pnpm install # 使用 pnpm 安装依赖
+  artifacts:
+    paths:
+      - node_modules/ # 保留依赖目录供后续阶段使用
+
+lint:
+  stage: lint
+  script:
+    - pnpm run lint # 代码规范检查
+
+# test:
+#   stage: test
+#   script:
+#     - pnpm run test # 运行单元测试
+
+build:
+  stage: build
+  script:
+    - pnpm run build # 构建 Next.js 项目
+  artifacts:
+    paths:
+      - .next # 保留构建产物供部署使用
+      - prisma/migrations # 保留 Prisma 迁移文件
+
+deploy_test:
+  stage: deploy
+  script:
+    - echo "Deploying to test environment..." # 部署到测试环境（MR 时触发）
+    # 这里写你的测试环境部署脚本，比如 scp、rsync、docker、kubectl 等
+    # 例如: scp -r .next user@your-test-server:/var/www/your-app
+  only:
+    - merge_requests # 仅在 Merge Request（PR）时触发
+
+deploy_prod:
+  stage: deploy
+  script:
+    - echo "Deploying to production environment..." # 部署到生产环境（main 分支合并后触发）
+    # 这里写你的生产环境部署脚本
+  only:
+    - main # 仅在 main 分支有变更时触发
